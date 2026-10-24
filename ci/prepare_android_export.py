@@ -40,7 +40,11 @@ def main() -> None:
         text = replace_assignment(text, "keystore/release_password", quoted(release_pass))
         print("Using the release keystore from secrets")
     else:
-        print("Release keystore secrets are not all set; Android artifacts will be debug-signed")
+        # A release export looks at keystore/release even when that path is empty.
+        text = replace_assignment(text, "keystore/release", quoted(debug_path))
+        text = replace_assignment(text, "keystore/release_user", quoted("androiddebugkey"))
+        text = replace_assignment(text, "keystore/release_password", quoted("android"))
+        print("Release keystore secrets are not all set; signing the release export with the debug keystore")
     path.write_text(text)
 
 
