@@ -1,0 +1,155 @@
+# Export a Cobblewick release AAB and APK (targetSdk 36).
+# Uses the release keystore secrets when they are all present, otherwise a debug keystore.
+name: android-release
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ["main", "cursor/**"]
+
+env:
+  GODOT_VERSION: "4.6"
+
+jobs:
+  phone-screenshots:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Godot
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends xvfb unzip wget ca-certificates \
+            libgl1 libglib2.0-0 libfontconfig1 libxcursor1 libxinerama1 libxrandr2 libxi6 \
+            libxext6 libx11-6 libxrender1 libxfixes3 mesa-vulkan-drivers libgl1-mesa-dri
+          mkdir -p "$RUNNER_TEMP/godot"
+          curl -fsSL -o "$RUNNER_TEMP/godot.zip" \
+            "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
+          unzip -q "$RUNNER_TEMP/godot.zip" -d "$RUNNER_TEMP/godot"
+          GODOT=$(find "$RUNNER_TEMP/godot" -type f -name 'Godot*' | head -1)
+          chmod +x "$GODOT"
+          echo "GODOT=$GODOT" >> "$GITHUB_ENV"
+          "$GODOT" --version
+      - name: Headless rules test
+        run: |
+          set -euo pipefail
+          "$GODOT" --headless --path . --import --quit
+          "$GODOT" --headless --path . --script res://scripts/tests/test_town_rules.gd
+      - name: Capture landscape phone screenshots
+        run: |
+          set -euo pipefail
+          # Software Vulkan first, so the shot uses the Mobile renderer. Fall back to Compatibility.
+          set +e
+          xvfb-run -a -s "-screen 0 1600x900x24" "$GODOT" --path . --rendering-driver vulkan -- --shots
+          status=$?
+          set -e
+          if [ "$status" -ne 0 ] || [ ! -f build/screenshots/01-menu.png ]; then
+            echo "Mobile/Vulkan capture failed ($status); retrying with the Compatibility renderer"
+            xvfb-run -a -s "-screen 0 1600x900x24" "$GODOT" --path . --rendering-method gl_compatibility -- --shots
+          fi
+          test -f build/screenshots/01-menu.png
+          test -f build/screenshots/02-gameplay.png
+          test -f build/screenshots/03-goals.png
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: phone-screenshots
+          path: build/screenshots/*.png
+          if-no-files-found: ignore
+
+  android:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Java and Android SDK packages
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install SDK 36, build-tools, CMake, and the Godot NDK
+        run: |
+          set -euo pipefail
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager --install \
+            "platform-tools" \
+            "platforms;android-36" \
+            "build-tools;35.0.1" \
+            "cmake;3.10.2.4988404" \
+            "ndk;28.1.13356709"
+          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT" >> "$GITHUB_ENV"
+          echo "ANDROID_HOME=$ANDROID_HOME" >> "$GITHUB_ENV"
+
+      - name: Install Godot 4.6 and Android export templates
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends unzip wget ca-certificates
+          mkdir -p "$RUNNER_TEMP/godot" "$RUNNER_TEMP/tpl"
+          curl -fsSL -o "$RUNNER_TEMP/godot.zip" \
+            "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
+          unzip -q "$RUNNER_TEMP/godot.zip" -d "$RUNNER_TEMP/godot"
+          GODOT=$(find "$RUNNER_TEMP/godot" -type f -name 'Godot*' | head -1)
+          chmod +x "$GODOT"
+          echo "GODOT=$GODOT" >> "$GITHUB_ENV"
+          curl -fsSL -o "$RUNNER_TEMP/templates.tpz" \
+            "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_export_templates.tpz"
+          unzip -q "$RUNNER_TEMP/templates.tpz" -d "$RUNNER_TEMP/tpl"
+          DEST="$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable"
+          mkdir -p "$DEST"
+          cp -R "$RUNNER_TEMP/tpl/templates/." "$DEST/"
+          python3 ci/bump_android_compile_sdk.py "$DEST/android_source.zip"
+          "$GODOT" --version
+
+      - name: Debug keystore, release keystore, and editor settings
+        env:
+          ANDROID_KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          set -euo pipefail
+          keytool -genkeypair -v -keystore "$RUNNER_TEMP/debug.keystore" \
+            -storepass android -alias androiddebugkey -keypass android \
+            -keyalg RSA -keysize 2048 -validity 10000 \
+            -dname "CN=Android Debug,O=Android,C=US"
+          echo "ANDROID_DEBUG_KEYSTORE=$RUNNER_TEMP/debug.keystore" >> "$GITHUB_ENV"
+          if [ -n "${ANDROID_KEYSTORE_B64}" ] && [ -n "${ANDROID_KEYSTORE_PASSWORD}" ] && [ -n "${ANDROID_KEY_ALIAS}" ]; then
+            printf '%s' "$ANDROID_KEYSTORE_B64" | base64 --decode > "$RUNNER_TEMP/release.keystore"
+            echo "ANDROID_RELEASE_KEYSTORE=$RUNNER_TEMP/release.keystore" >> "$GITHUB_ENV"
+          else
+            echo "ANDROID_RELEASE_KEYSTORE=" >> "$GITHUB_ENV"
+          fi
+          JAVA_HOME=$(dirname $(dirname $(readlink -f $(which java))))
+          echo "JAVA_HOME=$JAVA_HOME" >> "$GITHUB_ENV"
+          mkdir -p "$HOME/.config/godot"
+          python3 -c 'import os; from pathlib import Path; Path(os.environ["HOME"], ".config/godot/editor_settings-4.6.tres").write_text("[gd_resource type=\"EditorSettings\" format=3]\n\n[resource]\nexport/android/android_sdk_path = \"%s\"\nexport/android/java_sdk_path = \"%s\"\nexport/android/debug_keystore = \"%s\"\nexport/android/debug_keystore_user = \"androiddebugkey\"\nexport/android/debug_keystore_pass = \"android\"\n" % (os.environ["ANDROID_SDK_ROOT"], os.environ["JAVA_HOME"], os.environ["RUNNER_TEMP"] + "/debug.keystore"))'
+          GITHUB_RUN_NUMBER="${{ github.run_number }}" python3 ci/prepare_android_export.py
+
+      - name: Export APK and AAB
+        run: |
+          set -euo pipefail
+          mkdir -p build/android android/apk android/aab
+          "$GODOT" --headless --path . --import --quit
+          "$GODOT" --headless --path . --export-release "Android APK" "build/android/Cobblewick.apk"
+          "$GODOT" --headless --path . --export-release "Android AAB" "build/android/Cobblewick.aab"
+          ls -lh build/android
+          test -f build/android/Cobblewick.apk
+          test -f build/android/Cobblewick.aab
+          # Confirm the manifest targets API 36.
+          if command -v aapt >/dev/null 2>&1; then
+            aapt dump badging build/android/Cobblewick.apk | head -5
+          fi
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: android-cobblewick
+          path: |
+            build/android/*.apk
+            build/android/*.aab
+          if-no-files-found: error

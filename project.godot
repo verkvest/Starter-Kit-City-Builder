@@ -14,17 +14,36 @@ compatibility/default_parent_skeleton_in_mesh_instance_3d=true
 
 [application]
 
-config/name="Starter Kit City Builder"
-config/tags=PackedStringArray("starterkit")
-run/main_scene="res://scenes/main.tscn"
-config/features=PackedStringArray("4.6", "Forward Plus")
-boot_splash/bg_color=Color(0.92549, 0.92549, 0.960784, 1)
+config/name="Cobblewick"
+config/version="0.1.0"
+config/description="Lay roads, raise homes, and charter the town of Cobblewick."
+config/tags=PackedStringArray("game", "citybuilder")
+run/main_scene="res://scenes/title.tscn"
+config/features=PackedStringArray("4.6", "Mobile")
+boot_splash/bg_color=Color(0.655, 0.871, 0.992, 1)
 boot_splash/image="res://splash-screen.png"
 config/icon="res://icon.png"
 
 [autoload]
 
 Audio="*res://scripts/audio.gd"
+GameState="*res://scripts/game_state.gd"
+ShotRunner="*res://scripts/shot_runner.gd"
+
+[display]
+
+window/size/viewport_width=1280
+window/size/viewport_height=720
+window/stretch/mode="canvas_items"
+window/stretch/aspect="expand"
+window/handheld/orientation=4
+window/size/window_width_override=1280
+window/size/window_height_override=720
+
+[input_devices]
+
+pointing/emulate_mouse_from_touch=true
+pointing/emulate_touch_from_mouse=false
 
 [editor]
 
@@ -115,4 +134,6 @@ zoom_out={
 
 [rendering]
 
-anti_aliasing/quality/msaa_3d=2
+renderer/rendering_method="mobile"
+anti_aliasing/quality/msaa_3d=1
+lights_and_shadows/directional_shadow/size=2048

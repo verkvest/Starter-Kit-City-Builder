@@ -1,0 +1,162 @@
+# Export Cobblewick with Godot, archive it, and upload to TestFlight.
+# Signing and upload run when the App Store Connect API secrets are present.
+# The export and unsigned archive still run without those secrets.
+name: ios-testflight
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ["main", "cursor/**"]
+
+env:
+  TEAM_ID: 38PT254HDZ
+  BUNDLE_ID: es.verkvest.cobblewick
+  APP_VERSION: "0.1.0"
+  GODOT_VERSION: "4.6"
+
+jobs:
+  testflight:
+    runs-on: macos-15
+    timeout-minutes: 90
+    permissions:
+      contents: read
+    env:
+      HAS_KEY: ${{ secrets.APPSTORE_API_KEY_P8 != '' && secrets.APPSTORE_API_KEY_ID != '' && secrets.APPSTORE_API_ISSUER_ID != '' }}
+    steps:
+      - name: Check secrets
+        run: |
+          if [ "$HAS_KEY" != "true" ]; then
+            echo "::notice::App Store Connect API key secrets are not set. The Xcode project will still be exported and archived; signing and TestFlight upload will be skipped."
+          fi
+
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode 26 when it is installed
+        run: |
+          X=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | grep -vi beta | sort -V | tail -1 || true)
+          if [ -n "$X" ]; then
+            sudo xcode-select -s "$X"
+          fi
+          xcodebuild -version
+
+      - name: Install Godot 4.6 and iOS export templates
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/godot" "$RUNNER_TEMP/tpl"
+          curl -fsSL -o "$RUNNER_TEMP/godot.zip" \
+            "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_macos.universal.zip"
+          unzip -q "$RUNNER_TEMP/godot.zip" -d "$RUNNER_TEMP/godot"
+          GODOT=$(find "$RUNNER_TEMP/godot" -type f -path '*.app/Contents/MacOS/Godot' | head -1)
+          echo "GODOT=$GODOT" >> "$GITHUB_ENV"
+          curl -fsSL -o "$RUNNER_TEMP/templates.tpz" \
+            "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_export_templates.tpz"
+          unzip -q "$RUNNER_TEMP/templates.tpz" -d "$RUNNER_TEMP/tpl"
+          DEST="$HOME/Library/Application Support/Godot/export_templates/${GODOT_VERSION}.stable"
+          mkdir -p "$DEST"
+          cp -R "$RUNNER_TEMP/tpl/templates/." "$DEST/"
+          "$GODOT" --version
+
+      - name: Export the Xcode project
+        run: |
+          set -euo pipefail
+          "$GODOT" --headless --path . --import --quit
+          mkdir -p build/ios
+          "$GODOT" --headless --path . --export-release "iOS" "build/ios/Cobblewick.ipa"
+          find build/ios -maxdepth 3 -type d -o -name '*.xcodeproj' -o -name '*.plist' | head -80
+          test -n "$(find build/ios -name '*.xcodeproj' -print -quit)"
+
+      - name: Set build number and export compliance
+        run: |
+          python3 ci/patch_ios_info_plists.py build/ios "$BUNDLE_ID" "$APP_VERSION" "${{ github.run_number }}"
+
+      - name: Archive unsigned
+        run: |
+          set -euo pipefail
+          PROJ=$(find build/ios -name '*.xcodeproj' | head -1)
+          echo "PROJ=$PROJ" >> "$GITHUB_ENV"
+          xcodebuild -project "$PROJ" -list
+          SCHEME=$(xcodebuild -project "$PROJ" -list | awk '/Schemes:/{flag=1; next} flag && NF {print $1; exit}')
+          echo "SCHEME=$SCHEME" >> "$GITHUB_ENV"
+          test -n "$SCHEME"
+          xcodebuild -project "$PROJ" -scheme "$SCHEME" -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath "$RUNNER_TEMP/Cobblewick.xcarchive" \
+            -allowProvisioningUpdates \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            DEVELOPMENT_TEAM="$TEAM_ID" \
+            PRODUCT_BUNDLE_IDENTIFIER="$BUNDLE_ID" \
+            MARKETING_VERSION="$APP_VERSION" \
+            CURRENT_PROJECT_VERSION="${{ github.run_number }}" \
+            SKIP_INSTALL=NO INSTALL_PATH=/Applications \
+            archive | tee "$RUNNER_TEMP/archive.log" | tail -80
+          test ${PIPESTATUS[0]} -eq 0
+          find "$RUNNER_TEMP/Cobblewick.xcarchive" -maxdepth 3 | head -30
+          /usr/libexec/PlistBuddy -c Print "$RUNNER_TEMP/Cobblewick.xcarchive/Info.plist"
+
+      - name: Install API key
+        if: env.HAS_KEY == 'true'
+        env:
+          APPSTORE_API_KEY_P8: ${{ secrets.APPSTORE_API_KEY_P8 }}
+          APPSTORE_API_KEY_ID: ${{ secrets.APPSTORE_API_KEY_ID }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.appstoreconnect/private_keys
+          KEYFILE=~/.appstoreconnect/private_keys/AuthKey_${APPSTORE_API_KEY_ID}.p8
+          if printf '%s' "$APPSTORE_API_KEY_P8" | grep -q "BEGIN PRIVATE KEY"; then
+            printf '%s\n' "$APPSTORE_API_KEY_P8" > "$KEYFILE"
+          else
+            printf '%s' "$APPSTORE_API_KEY_P8" | base64 --decode > "$KEYFILE"
+          fi
+          chmod 600 "$KEYFILE"
+          echo "KEYFILE=$KEYFILE" >> "$GITHUB_ENV"
+
+      - name: Register the bundle id
+        if: env.HAS_KEY == 'true'
+        env:
+          APPSTORE_API_KEY_ID: ${{ secrets.APPSTORE_API_KEY_ID }}
+          APPSTORE_API_ISSUER_ID: ${{ secrets.APPSTORE_API_ISSUER_ID }}
+        run: |
+          python3 -m pip install --user pyjwt cryptography
+          export PATH="$HOME/Library/Python/3.9/bin:$HOME/Library/Python/3.11/bin:$HOME/Library/Python/3.12/bin:$HOME/Library/Python/3.13/bin:$PATH"
+          python3 ci/register_bundle_id.py
+
+      - name: Sign and upload to TestFlight
+        if: env.HAS_KEY == 'true'
+        env:
+          APPSTORE_API_KEY_ID: ${{ secrets.APPSTORE_API_KEY_ID }}
+          APPSTORE_API_ISSUER_ID: ${{ secrets.APPSTORE_API_ISSUER_ID }}
+        run: |
+          set -euo pipefail
+          python3 -c 'import os, plistlib; plistlib.dump({"method":"app-store-connect","destination":"export","teamID":os.environ["TEAM_ID"],"signingStyle":"automatic","manageAppVersionAndBuildNumber":False}, open(os.environ["RUNNER_TEMP"]+"/ExportOptions.plist","wb"), fmt=plistlib.FMT_XML)'
+          xcodebuild -exportArchive -archivePath "$RUNNER_TEMP/Cobblewick.xcarchive" \
+            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" -exportPath "$RUNNER_TEMP/export" \
+            -allowProvisioningUpdates -authenticationKeyPath "$KEYFILE" \
+            -authenticationKeyID "$APPSTORE_API_KEY_ID" -authenticationKeyIssuerID "$APPSTORE_API_ISSUER_ID"
+          ls -la "$RUNNER_TEMP/export"
+          set +e
+          xcrun altool --upload-app -t ios -f "$RUNNER_TEMP"/export/*.ipa \
+            --apiKey "$APPSTORE_API_KEY_ID" --apiIssuer "$APPSTORE_API_ISSUER_ID" 2>&1 | tee "$RUNNER_TEMP/upload.log"
+          status=${PIPESTATUS[0]}
+          set -e
+          if grep -E -q "ERROR|errors uploading|Unable to upload" "$RUNNER_TEMP/upload.log" || [ "$status" -ne 0 ]; then
+            if grep -E -q "No suitable application records|Cannot determine the Apple ID|could not find an application|No app record|does not exist|ITMS-4238|bundle version must be higher|Unable to find an application" "$RUNNER_TEMP/upload.log"; then
+              if grep -E -q "No suitable application records|Cannot determine the Apple ID|could not find an application|No app record|ITMS-4238|Unable to find an application" "$RUNNER_TEMP/upload.log"; then
+                echo "::error::No App Store Connect app record for ${BUNDLE_ID} yet. Create it in App Store Connect → Apps → + (New App) with this bundle id, then re-run ios-testflight. The bundle id can be registered by the API; the app record cannot, and this failure is expected until that record exists."
+              fi
+            fi
+            exit 1
+          fi
+          echo "::notice::Uploaded ${BUNDLE_ID} ${APP_VERSION} (${{ github.run_number }}) to App Store Connect"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ios-testflight-logs
+          path: |
+            ${{ runner.temp }}/archive.log
+            ${{ runner.temp }}/upload.log
+          if-no-files-found: ignore
+
+      - name: Cleanup key
+        if: always()
+        run: rm -rf ~/.appstoreconnect/private_keys

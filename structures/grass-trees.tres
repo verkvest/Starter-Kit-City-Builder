@@ -6,4 +6,11 @@
 [resource]
 script = ExtResource("2_pnpij")
 model = ExtResource("1_lcgc1")
-price = 25
+display_name = "Trees"
+category = "park"
+price = 20
+residents = 0
+coin_bonus = 0
+unlock_at = 8
+needs_road = false
+park_points = 1
