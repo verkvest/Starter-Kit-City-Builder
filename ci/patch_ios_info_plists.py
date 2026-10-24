@@ -19,8 +19,15 @@ def main() -> int:
             continue
         if not isinstance(info, dict):
             continue
+        package_type = str(info.get("CFBundlePackageType", ""))
+        if package_type == "FMWK":
+            continue
         identifier = str(info.get("CFBundleIdentifier", ""))
-        if bundle_id not in identifier:
+        # Godot's Xcode project often leaves the id as an Xcode variable.
+        uses_bundle = bundle_id in identifier or identifier.startswith("$(PRODUCT_BUNDLE_IDENTIFIER")
+        named_app = "Cobblewick" in str(info.get("CFBundleDisplayName", "")) + str(info.get("CFBundleName", ""))
+        if not uses_bundle and not named_app:
+            print(f"skip {path} identifier={identifier!r}")
             continue
         info["CFBundleShortVersionString"] = version
         info["CFBundleVersion"] = build

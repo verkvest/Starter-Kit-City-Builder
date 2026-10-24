@@ -134,14 +134,18 @@ jobs:
             -storepass android -alias androiddebugkey -keypass android \
             -keyalg RSA -keysize 2048 -validity 10000 \
             -dname "CN=Android Debug,O=Android,C=US"
-          echo "ANDROID_DEBUG_KEYSTORE=$RUNNER_TEMP/debug.keystore" >> "$GITHUB_ENV"
+          export ANDROID_DEBUG_KEYSTORE="$RUNNER_TEMP/debug.keystore"
+          echo "ANDROID_DEBUG_KEYSTORE=$ANDROID_DEBUG_KEYSTORE" >> "$GITHUB_ENV"
           if [ -n "${ANDROID_KEYSTORE_B64}" ] && [ -n "${ANDROID_KEYSTORE_PASSWORD}" ] && [ -n "${ANDROID_KEY_ALIAS}" ]; then
             printf '%s' "$ANDROID_KEYSTORE_B64" | base64 --decode > "$RUNNER_TEMP/release.keystore"
-            echo "ANDROID_RELEASE_KEYSTORE=$RUNNER_TEMP/release.keystore" >> "$GITHUB_ENV"
+            export ANDROID_RELEASE_KEYSTORE="$RUNNER_TEMP/release.keystore"
+            echo "ANDROID_RELEASE_KEYSTORE=$ANDROID_RELEASE_KEYSTORE" >> "$GITHUB_ENV"
           else
+            export ANDROID_RELEASE_KEYSTORE=""
             echo "ANDROID_RELEASE_KEYSTORE=" >> "$GITHUB_ENV"
           fi
           JAVA_HOME=$(dirname $(dirname $(readlink -f $(which java))))
+          export JAVA_HOME
           echo "JAVA_HOME=$JAVA_HOME" >> "$GITHUB_ENV"
           mkdir -p "$HOME/.config/godot"
           python3 -c 'import os; from pathlib import Path; Path(os.environ["HOME"], ".config/godot/editor_settings-4.6.tres").write_text("[gd_resource type=\"EditorSettings\" format=3]\n\n[resource]\nexport/android/android_sdk_path = \"%s\"\nexport/android/java_sdk_path = \"%s\"\nexport/android/debug_keystore = \"%s\"\nexport/android/debug_keystore_user = \"androiddebugkey\"\nexport/android/debug_keystore_pass = \"android\"\n" % (os.environ["ANDROID_SDK_ROOT"], os.environ["JAVA_HOME"], os.environ["RUNNER_TEMP"] + "/debug.keystore"))'
