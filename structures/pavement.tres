@@ -6,4 +6,11 @@
 [resource]
 script = ExtResource("2_i48go")
 model = ExtResource("1_gudnj")
-price = 10
+display_name = "Plaza"
+category = "civic"
+price = 20
+residents = 0
+coin_bonus = 0
+unlock_at = 16
+needs_road = false
+park_points = 0

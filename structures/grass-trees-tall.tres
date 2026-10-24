@@ -6,4 +6,11 @@
 [resource]
 script = ExtResource("2_b2sah")
 model = ExtResource("1_nbdd1")
-price = 25
+display_name = "Tall Trees"
+category = "park"
+price = 30
+residents = 0
+coin_bonus = 0
+unlock_at = 40
+needs_road = false
+park_points = 2

@@ -1,61 +1,30 @@
-<p align="center"><img src="icon.png"/></p>
+<p align="center"><img src="icon.png" width="128"/></p>
 
-# Starter Kit City Builder
+# Cobblewick
 
-This package includes a basic template for a 3D city builder in Godot 4.6. Includes features like;
+A small landscape city builder for phones, built on the Kenney Starter Kit City Builder for Godot 4.6. Lay roads, house neighbors, and grow Cobblewick to a chartered town of 100 residents.
 
-- Building and removing structures
-- Smooth camera controls
-- Dynamic MeshLibrary creation
-- Saving/loading
-- Sprites and 3D Models _(CC0 licensed)_
+Bundle id: `es.verkvest.cobblewick`
+
+### Play
+
+- **Title menu** — continue a saved town, start a new one, read how to play, or open credits.
+- **Touch** — tap to place or remove, drag with one finger to pan, pinch to zoom, twist with two fingers to rotate the camera. The build palette uses large buttons. Rotate a piece with the Rotate button or by tapping the same piece again.
+- **Desktop** — WASD pans, the scroll wheel zooms, the middle mouse button orbits, left click places, right click rotates the piece, Delete removes, F recenters.
+- **Goal** — homes count residents only when they sit beside a road. Income arrives every five seconds. Crossing 10, 25, 50, and 100 residents pays a bonus and unlocks bigger buildings. The charter at 100 is the win; the town stays playable after that.
+- **Save** — the town autosaves to `user://map.res`. Sound and the first-run hint live in `user://profile.cfg`.
 
 ### Screenshot
 
 <p align="center"><img src="screenshots/screenshot.png"/></p>
 
-### Controls
+### Adding buildings
 
-| Key | Command |
-| --- | --- |
-| <kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd> | Move camera |
-| <kbd>F</kbd> | Camera to center |
-| <kbd>Middle mouse button</kbd> | Hold to rotate camera |
-| <kbd>Scroll wheel</kbd> | Zoom |
-| <kbd>Left mouse button</kbd> | Place building |
-| <kbd>DEL</kbd> | Remove building |
-| <kbd>Right mouse button</kbd> | Rotate building |
-| <kbd>Q</kbd> <kbd>E</kbd>  | Toggle between buildings |
-| <kbd>F1</kbd> | Save |
-| <kbd>F2</kbd> | Load |
-
-### Instructions
-
-#### 1. How to add more buildings?
-
-Duplicate one of the existing resources in the 'structures' folder, adjust the properties in the inspector. Select the 'Builder' node in the scene and add your new resources to the 'Structures' array.
-
-#### 2. How to adjust building models?
-
-Select the resource of the building you'd like to change in the 'structures' folder, adjust the model in the inspector.
-
-#### 3. How to save and load cities?
-
-Pressing F1 during gameplay will save the current city to disk, F2 will load it from the same location. The file is saved as 'map.res' in the user folder (see below). You can adjust this in the 'action_save' and 'action_load' functions found in the 'builder.gd' script.
-
-User data folder:
-
-> Windows: `%APPDATA%/Godot/app_userdata/Starter Kit City Builder/`
-
-> Linux: `~/.local/share/godot/app_userdata/Starter Kit City Builder/`
-
-> MacOS: `~/Library/Application Support/Godot/app_userdata/Starter Kit City Builder/`
-
-#### 4. How to include city data in the project and load this?
-
-You'll find a sample map in the 'sample map' folder, to load this during gameplay press F3. You can find the function that handles this as 'action_load_resources' found in the 'builder.gd' script.
+Duplicate a resource in `structures/`, set its model and gameplay fields (name, category, price, residents, unlock), then add it to the Builder node's Structures array. Keep existing entries in order: saved towns store mesh-library item ids.
 
 ### License
+
+Game code is MIT. Kenney models, sprites, and sounds are CC0. The Lilita One font is OFL 1.1 (reserved name Lilita). The audio pool is adapted from KidsCanCode under MIT. Godot Engine is MIT. Full notices are in `THIRD_PARTY_LICENSES.md` and on the in-game Credits screen.
 
 MIT License
 

@@ -6,4 +6,11 @@
 [resource]
 script = ExtResource("2_wqyte")
 model = ExtResource("1_r2n53")
-price = 10
+display_name = "Fountain"
+category = "civic"
+price = 90
+residents = 0
+coin_bonus = 2
+unlock_at = 40
+needs_road = false
+park_points = 0

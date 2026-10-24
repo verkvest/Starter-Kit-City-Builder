@@ -6,4 +6,11 @@
 [resource]
 script = ExtResource("2_470aq")
 model = ExtResource("1_i07jw")
-price = 25
+display_name = "Lamp Road"
+category = "road"
+price = 30
+residents = 0
+coin_bonus = 0
+unlock_at = 16
+needs_road = false
+park_points = 0

@@ -6,4 +6,11 @@
 [resource]
 script = ExtResource("2_rkiq0")
 model = ExtResource("1_6yyww")
-price = 70
+display_name = "Villa"
+category = "home"
+price = 130
+residents = 8
+coin_bonus = 0
+unlock_at = 25
+needs_road = true
+park_points = 0

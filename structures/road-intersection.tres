@@ -6,4 +6,11 @@
 [resource]
 script = ExtResource("2_3eq5k")
 model = ExtResource("1_pnjl2")
-price = 25
+display_name = "Crossing"
+category = "road"
+price = 40
+residents = 0
+coin_bonus = 0
+unlock_at = 50
+needs_road = false
+park_points = 0

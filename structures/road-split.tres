@@ -6,4 +6,11 @@
 [resource]
 script = ExtResource("2_xa71m")
 model = ExtResource("1_ku0rj")
-price = 25
+display_name = "Split"
+category = "road"
+price = 30
+residents = 0
+coin_bonus = 0
+unlock_at = 25
+needs_road = false
+park_points = 0
