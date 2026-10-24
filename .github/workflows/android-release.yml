@@ -156,8 +156,8 @@ jobs:
           set -euo pipefail
           mkdir -p build/android android/apk android/aab
           "$GODOT" --headless --path . --import --quit
-          "$GODOT" --headless --path . --export-release "Android APK" "build/android/Cobblewick.apk"
-          "$GODOT" --headless --path . --export-release "Android AAB" "build/android/Cobblewick.aab"
+          "$GODOT" --headless --path . --install-android-build-template --export-release "Android APK" "build/android/Cobblewick.apk"
+          "$GODOT" --headless --path . --install-android-build-template --export-release "Android AAB" "build/android/Cobblewick.aab"
           ls -lh build/android
           test -f build/android/Cobblewick.apk
           test -f build/android/Cobblewick.aab

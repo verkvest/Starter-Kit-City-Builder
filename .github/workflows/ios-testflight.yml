@@ -116,9 +116,9 @@ jobs:
           APPSTORE_API_KEY_ID: ${{ secrets.APPSTORE_API_KEY_ID }}
           APPSTORE_API_ISSUER_ID: ${{ secrets.APPSTORE_API_ISSUER_ID }}
         run: |
-          python3 -m pip install --user pyjwt cryptography
-          export PATH="$HOME/Library/Python/3.9/bin:$HOME/Library/Python/3.11/bin:$HOME/Library/Python/3.12/bin:$HOME/Library/Python/3.13/bin:$PATH"
-          python3 ci/register_bundle_id.py
+          python3 -m venv "$RUNNER_TEMP/asc-venv"
+          "$RUNNER_TEMP/asc-venv/bin/pip" install --disable-pip-version-check pyjwt cryptography
+          "$RUNNER_TEMP/asc-venv/bin/python" ci/register_bundle_id.py
 
       - name: Sign and upload to TestFlight
         if: env.HAS_KEY == 'true'
